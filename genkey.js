@@ -1,25 +1,31 @@
 const secp256k1 = require('secp256k1');
 const createHash = require('create-hash');
 const bip39 = require('bip39');
-const bitcoin = require('bitcoinjs-lib');
+const { bech32 } = require('bech32');
 const readline = require('readline');
 
-// Import the encoding module from bech32
-const { bech32 } = require('bech32');
-
-function derivePrivateKey(mnemonic, coinType) {
+function derivePrivateKey(mnemonic) {
+    // Generate a seed from the mnemonic
     const seed = bip39.mnemonicToSeedSync(mnemonic);
-    const root = bitcoin.bip32.fromSeed(seed);
-    const child = root.derivePath(`m/44'/${coinType}'/0'/0/0`);
-    return child.privateKey;
+    // Hash the seed to derive a private key
+    const hash = createHash('sha256').update(seed).digest();
+    let privateKey = hash;
+    // Ensure the private key is valid
+    while (!secp256k1.privateKeyVerify(privateKey)) {
+        privateKey = createHash('sha256').update(privateKey).digest();
+    }
+    return privateKey;
 }
 
 function createCosmosAddress(privateKey, prefix) {
+    // Derive the public key
     const publicKey = secp256k1.publicKeyCreate(privateKey, true);
+    // Hash the public key to get the address
     const sha256Hash = createHash('sha256').update(publicKey).digest();
     const ripemd160Hash = createHash('ripemd160').update(sha256Hash).digest();
-    const words = bech32.toWords(ripemd160Hash);
-    return bech32.encode(prefix, words);
+    // Encode the address using Bech32
+    const address = bech32.encode(prefix, bech32.toWords(ripemd160Hash));
+    return address;
 }
 
 const rl = readline.createInterface({
@@ -28,15 +34,13 @@ const rl = readline.createInterface({
 });
 
 rl.question('Enter your mnemonic phrase: ', (mnemonic) => {
-    rl.question("Enter the coin type (e.g., 118 for Cosmos): ", (coinTypeStr) => {
-        rl.question("Enter the address prefix (e.g., cosmos, chihuahua): ", (prefix) => {
-            const privateKey = derivePrivateKey(mnemonic, parseInt(coinTypeStr));
-            const address = createCosmosAddress(privateKey, prefix);
+    rl.question("Enter the address prefix (e.g., cosmos, chihuahua): ", (prefix) => {
+        const privateKey = derivePrivateKey(mnemonic);
+        const address = createCosmosAddress(privateKey, prefix);
 
-            console.log(`Address: ${address}`);
-            console.log(`Private Key: ${privateKey.toString('hex')}`);
+        console.log(`Address: ${address}`);
+        console.log(`Private Key: ${privateKey.toString('hex')}`);
 
-            rl.close();
-        });
+        rl.close();
     });
 });
