@@ -1,6 +1,7 @@
 const secp256k1 = require('secp256k1');
 const createHash = require('create-hash');
 const bip39 = require('bip39');
+const bip32 = require('bip32'); // Import the bip32 library
 const { bech32 } = require('bech32');
 const readline = require('readline');
 
